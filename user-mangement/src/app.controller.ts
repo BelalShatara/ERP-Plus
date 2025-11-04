@@ -1,0 +1,20 @@
+import { Controller, Get } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { AppService } from './app.service';
+import { Unprotected } from 'nest-keycloak-connect';
+
+@ApiTags('App')
+@Controller()
+export class AppController {
+  constructor(private readonly appService: AppService) {}
+
+
+
+  @Unprotected()
+  @Get()
+  @ApiOperation({ summary: 'Health check', description: 'Returns a simple hello message' })
+  @ApiResponse({ status: 200, description: 'Service is running' })
+  getHello(): string {
+    return this.appService.getHello();
+  }
+}
