@@ -9,10 +9,19 @@ import { KeyclockService } from './keyclock/keyclock.service';
 import { HttpModule } from '@nestjs/axios';
 import { KeyclockModule } from './keyclock/keyclock.module';
 import { UserModule } from './user/user.module';
+import { SequelizeModule } from '@nestjs/sequelize';
+import { LoggingModule } from './logging/logging.module';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import databaseConfig from './config/database.config';
 
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [databaseConfig],
+      envFilePath: '.env',
+    }),
     KeycloakConnectModule.register({
       authServerUrl: keycloakConfig.authServerUrl,
       realm: keycloakConfig.realm,
@@ -20,10 +29,25 @@ import { UserModule } from './user/user.module';
       secret: keycloakConfig.secret,
       useNestLogger: true,
     }),
+    SequelizeModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        dialect: 'postgres',
+        host: configService.get('DB_HOST'),
+        port: +configService.get('DB_PORT'),
+        username: configService.get('DB_USERNAME'),
+        password: configService.get('DB_PASSWORD'),
+        database: configService.get('DB_DATABASE'),
+        autoLoadModels: true,
+        synchronize: configService.get('NODE_ENV') !== 'production',
+      }),
+      inject: [ConfigService],
+    }),
     AuthModule,
     HttpModule,
     KeyclockModule,
     UserModule,
+    LoggingModule,
   ],
   controllers: [AppController],
   providers: [AppService,

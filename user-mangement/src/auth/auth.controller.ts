@@ -1,7 +1,7 @@
 import { Body, Controller, HttpException, HttpStatus, Post } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
-import { LoginDto } from './auth.dto';
+import { LoginDto, SignupDto } from './auth.dto';
 import { keycloakConfig } from 'src/config/keyclock.config';
 import axios from 'axios';
 import { Unprotected } from 'nest-keycloak-connect';  // 👈 import this
@@ -16,20 +16,24 @@ import { LoginResponse } from './interface/login.interface';
 export class AuthController {
 
 
-    constructor(private readonly authService: AuthService,
-      private readonly keyclockService: KeyclockService,
-      private readonly httpService: HttpService
+    constructor(private readonly authService: AuthService
     ) {}
 
 
 @Unprotected()
 @Post('login')
 async login(@Body() loginDto: LoginDto) {
-
-    const response = this.keyclockService.login(loginDto.email, loginDto.password);
+    const response =  this.authService.login(loginDto.email, loginDto.password);
     return response
 }
 
+
+
+// @Unprotected()
+// @Post('signup')
+// async signup(@Body() signupDto: SignupDto) {
+//     return this.authService.signup(signupDto);
+// }
 
 
 

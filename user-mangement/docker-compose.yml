@@ -10,10 +10,28 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: user_management
+      
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
     networks:
       - app-network
+
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pg
+    ports:
+      - '8089:80'
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@example.com
+      - PGADMIN_DEFAULT_PASSWORD=password
+    networks:
+      - app-network
+    depends_on:
+      - postgres
+
+
 
   app:
     build:
@@ -30,6 +48,31 @@ services:
       - DB_HOST=postgres
     networks:
       - app-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.5
+    container_name: keycloak
+    ports:
+      - '8088:8080'
+      - '9000:9000'
+    environment:
+      - KC_DB=postgres
+      - KC_DB_URL=jdbc:postgresql://postgres:5432/keycloak
+      - KC_DB_USERNAME=postgres
+      - KC_DB_PASSWORD=postgres
+      - KC_HOSTNAME=localhost
+      - KC_HOSTNAME_PORT=8088
+      - KC_BOOTSTRAP_ADMIN_USERNAME=admin
+      - KC_BOOTSTRAP_ADMIN_PASSWORD=admin
+      - KC_HOSTNAME_STRICT=false
+      - KC_HTTP_ENABLED=true
+      - KC_PROXY=edge
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+    command: ["start-dev"]
+
 
 volumes:
   postgres_data:
