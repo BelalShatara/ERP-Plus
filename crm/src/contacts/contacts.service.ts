@@ -1,51 +1,54 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/sequelize';
+import { InjectModel, InjectConnection } from '@nestjs/sequelize';
+import { Sequelize } from 'sequelize-typescript';
 import { Op } from 'sequelize';
 import { Contact } from './entities/contact.entity';
 import { Customer } from '../customers/entities/customer.entity';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
-import { BaseService } from '../common/base.service';
-import { TransactionService } from '../common/transaction.service';
 
 @Injectable()
-export class ContactsService extends BaseService {
+export class ContactsService {
   constructor(
     @InjectModel(Contact)
     private contactModel: typeof Contact,
     @InjectModel(Customer)
     private customerModel: typeof Customer,
-    transactionService: TransactionService,
-  ) {
-    super(transactionService);
-  }
+    @InjectConnection()
+    private readonly sequelize: Sequelize,
+  ) {}
 
   async create(createContactDto: CreateContactDto): Promise<Contact> {
-    return this.executeInTransaction(async (transaction) => {
-      // Verify customer exists
-      const customer = await this.customerModel.findByPk(
-        createContactDto.customerId,
-        { transaction },
-      );
-      if (!customer) {
-        throw new NotFoundException(
-          `Customer with ID ${createContactDto.customerId} not found`,
+    return await this.sequelize.transaction(async (transaction) => {
+      try {
+        const customer = await this.customerModel.findByPk(
+          createContactDto.customerId,
+          { transaction },
         );
-      }
+        if (!customer) {
+          throw new NotFoundException(
+            `Customer with ID ${createContactDto.customerId} not found`,
+          );
+        }
 
-      if (createContactDto.isPrimary) {
-        await this.contactModel.update(
-          { isPrimary: false },
-          {
-            where: {
-              customerId: createContactDto.customerId,
+        if (createContactDto.isPrimary) {
+          await this.contactModel.update(
+            { isPrimary: false },
+            {
+              where: {
+                customerId: createContactDto.customerId,
+              },
+              transaction,
             },
-            transaction,
-          },
-        );
-      }
+          );
+        }
 
-      return await this.contactModel.create(createContactDto, { transaction });
+        return await this.contactModel.create(createContactDto, {
+          transaction,
+        });
+      } catch (error) {
+        throw error;
+      }
     });
   }
 
@@ -81,41 +84,49 @@ export class ContactsService extends BaseService {
     id: number,
     updateContactDto: UpdateContactDto,
   ): Promise<Contact> {
-    return this.executeInTransaction(async (transaction) => {
-      const contact = await this.contactModel.findByPk(id, {
-        include: ['customer'],
-        transaction,
-      });
+    return await this.sequelize.transaction(async (transaction) => {
+      try {
+        const contact = await this.contactModel.findByPk(id, {
+          include: ['customer'],
+          transaction,
+        });
 
-      if (!contact) {
-        throw new NotFoundException(`Contact with ID ${id} not found`);
-      }
+        if (!contact) {
+          throw new NotFoundException(`Contact with ID ${id} not found`);
+        }
 
-      if (updateContactDto.isPrimary) {
-        await this.contactModel.update(
-          { isPrimary: false },
-          {
-            where: {
-              customerId: contact.customerId,
-              id: { [Op.ne]: id },
+        if (updateContactDto.isPrimary) {
+          await this.contactModel.update(
+            { isPrimary: false },
+            {
+              where: {
+                customerId: contact.customerId,
+                id: { [Op.ne]: id },
+              },
+              transaction,
             },
-            transaction,
-          },
-        );
-      }
+          );
+        }
 
-      await contact.update(updateContactDto, { transaction });
-      return contact.reload({ include: ['customer'], transaction });
+        await contact.update(updateContactDto, { transaction });
+        return contact.reload({ include: ['customer'], transaction });
+      } catch (error) {
+        throw error;
+      }
     });
   }
 
   async remove(id: number): Promise<void> {
-    return this.executeInTransaction(async (transaction) => {
-      const contact = await this.contactModel.findByPk(id, { transaction });
-      if (!contact) {
-        throw new NotFoundException(`Contact with ID ${id} not found`);
+    return await this.sequelize.transaction(async (transaction) => {
+      try {
+        const contact = await this.contactModel.findByPk(id, { transaction });
+        if (!contact) {
+          throw new NotFoundException(`Contact with ID ${id} not found`);
+        }
+        await contact.destroy({ transaction });
+      } catch (error) {
+        throw error;
       }
-      await contact.destroy({ transaction });
     });
   }
 

@@ -3,7 +3,6 @@ import { SequelizeModule } from '@nestjs/sequelize';
 import { CustomersModule } from './customers/customers.module';
 import { AddressesModule } from './addresses/addresses.module';
 import { ContactsModule } from './contacts/contacts.module';
-import { CommonModule } from './common/common.module';
 import { Customer } from './customers/entities/customer.entity';
 import { Address } from './addresses/entities/address.entity';
 import { Contact } from './contacts/entities/contact.entity';
@@ -24,7 +23,6 @@ import { AppService } from './app.service';
       models: [Customer, Address, Contact],
       logging: process.env.NODE_ENV === 'development',
     }),
-    CommonModule,
     CustomersModule,
     AddressesModule,
     ContactsModule,

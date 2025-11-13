@@ -3,41 +3,43 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectModel } from '@nestjs/sequelize';
+import { InjectModel, InjectConnection } from '@nestjs/sequelize';
+import { Sequelize } from 'sequelize-typescript';
 import { Customer } from './entities/customer.entity';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { Op } from 'sequelize';
-import { BaseService } from '../common/base.service';
-import { TransactionService } from '../common/transaction.service';
 
 @Injectable()
-export class CustomersService extends BaseService {
+export class CustomersService {
   constructor(
     @InjectModel(Customer)
     private customerModel: typeof Customer,
-    transactionService: TransactionService,
-  ) {
-    super(transactionService);
-  }
+    @InjectConnection()
+    private readonly sequelize: Sequelize,
+  ) {}
 
   async create(createCustomerDto: CreateCustomerDto): Promise<Customer> {
-    return this.executeInTransaction(async (transaction) => {
-      if (createCustomerDto.email) {
-        const existingCustomer = await this.customerModel.findOne({
-          where: { email: createCustomerDto.email },
+    return await this.sequelize.transaction(async (transaction) => {
+      try {
+        if (createCustomerDto.email) {
+          const existingCustomer = await this.customerModel.findOne({
+            where: { email: createCustomerDto.email },
+            transaction,
+          });
+          if (existingCustomer) {
+            throw new BadRequestException(
+              'Customer with this email already exists',
+            );
+          }
+        }
+
+        return await this.customerModel.create(createCustomerDto, {
           transaction,
         });
-        if (existingCustomer) {
-          throw new BadRequestException(
-            'Customer with this email already exists',
-          );
-        }
+      } catch (error) {
+        throw error;
       }
-
-      return await this.customerModel.create(createCustomerDto, {
-        transaction,
-      });
     });
   }
 
@@ -94,46 +96,56 @@ export class CustomersService extends BaseService {
     id: number,
     updateCustomerDto: UpdateCustomerDto,
   ): Promise<Customer> {
-    return this.executeInTransaction(async (transaction) => {
-      const customer = await this.customerModel.findByPk(id, {
-        include: ['addresses', 'contacts'],
-        transaction,
-      });
-
-      if (!customer) {
-        throw new NotFoundException(`Customer with ID ${id} not found`);
-      }
-
-      if (
-        updateCustomerDto.email &&
-        updateCustomerDto.email !== customer.email
-      ) {
-        const existingCustomer = await this.customerModel.findOne({
-          where: { email: updateCustomerDto.email },
+    return await this.sequelize.transaction(async (transaction) => {
+      try {
+        const customer = await this.customerModel.findByPk(id, {
+          include: ['addresses', 'contacts'],
           transaction,
         });
-        if (existingCustomer) {
-          throw new BadRequestException(
-            'Customer with this email already exists',
-          );
-        }
-      }
 
-      await customer.update(updateCustomerDto, { transaction });
-      return customer.reload({
-        include: ['addresses', 'contacts'],
-        transaction,
-      });
+        if (!customer) {
+          throw new NotFoundException(`Customer with ID ${id} not found`);
+        }
+
+        if (
+          updateCustomerDto.email &&
+          updateCustomerDto.email !== customer.email
+        ) {
+          const existingCustomer = await this.customerModel.findOne({
+            where: { email: updateCustomerDto.email },
+            transaction,
+          });
+          if (existingCustomer) {
+            throw new BadRequestException(
+              'Customer with this email already exists',
+            );
+          }
+        }
+
+        await customer.update(updateCustomerDto, { transaction });
+        return customer.reload({
+          include: ['addresses', 'contacts'],
+          transaction,
+        });
+      } catch (error) {
+        throw error;
+      }
     });
   }
 
   async remove(id: number): Promise<void> {
-    return this.executeInTransaction(async (transaction) => {
-      const customer = await this.customerModel.findByPk(id, { transaction });
-      if (!customer) {
-        throw new NotFoundException(`Customer with ID ${id} not found`);
+    return await this.sequelize.transaction(async (transaction) => {
+      try {
+        const customer = await this.customerModel.findByPk(id, {
+          transaction,
+        });
+        if (!customer) {
+          throw new NotFoundException(`Customer with ID ${id} not found`);
+        }
+        await customer.destroy({ transaction });
+      } catch (error) {
+        throw error;
       }
-      await customer.destroy({ transaction });
     });
   }
 

@@ -1,51 +1,55 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/sequelize';
+import { InjectModel, InjectConnection } from '@nestjs/sequelize';
+import { Sequelize } from 'sequelize-typescript';
 import { Op } from 'sequelize';
 import { Address } from './entities/address.entity';
 import { Customer } from '../customers/entities/customer.entity';
 import { CreateAddressDto } from './dto/create-address.dto';
 import { UpdateAddressDto } from './dto/update-address.dto';
-import { BaseService } from '../common/base.service';
-import { TransactionService } from '../common/transaction.service';
 
 @Injectable()
-export class AddressesService extends BaseService {
+export class AddressesService {
   constructor(
     @InjectModel(Address)
     private addressModel: typeof Address,
     @InjectModel(Customer)
     private customerModel: typeof Customer,
-    transactionService: TransactionService,
-  ) {
-    super(transactionService);
-  }
+    @InjectConnection()
+    private readonly sequelize: Sequelize,
+  ) {}
 
   async create(createAddressDto: CreateAddressDto): Promise<Address> {
-    return this.executeInTransaction(async (transaction) => {
-      const customer = await this.customerModel.findByPk(
-        createAddressDto.customerId,
-        { transaction },
-      );
-      if (!customer) {
-        throw new NotFoundException(
-          `Customer with ID ${createAddressDto.customerId} not found`,
+    return await this.sequelize.transaction(async (transaction) => {
+      try {
+        const customer = await this.customerModel.findByPk(
+          createAddressDto.customerId,
+          { transaction },
         );
-      }
+        if (!customer) {
+          throw new NotFoundException(
+            `Customer with ID ${createAddressDto.customerId} not found`,
+          );
+        }
 
-      if (createAddressDto.isDefault) {
-        await this.addressModel.update(
-          { isDefault: false },
-          {
-            where: {
-              customerId: createAddressDto.customerId,
-              addressType: createAddressDto.addressType,
+        if (createAddressDto.isDefault) {
+          await this.addressModel.update(
+            { isDefault: false },
+            {
+              where: {
+                customerId: createAddressDto.customerId,
+                addressType: createAddressDto.addressType,
+              },
+              transaction,
             },
-            transaction,
-          },
-        );
-      }
+          );
+        }
 
-      return await this.addressModel.create(createAddressDto, { transaction });
+        return await this.addressModel.create(createAddressDto, {
+          transaction,
+        });
+      } catch (error) {
+        throw error;
+      }
     });
   }
 
@@ -81,42 +85,51 @@ export class AddressesService extends BaseService {
     id: number,
     updateAddressDto: UpdateAddressDto,
   ): Promise<Address> {
-    return this.executeInTransaction(async (transaction) => {
-      const address = await this.addressModel.findByPk(id, {
-        include: ['customer'],
-        transaction,
-      });
+    return await this.sequelize.transaction(async (transaction) => {
+      try {
+        const address = await this.addressModel.findByPk(id, {
+          include: ['customer'],
+          transaction,
+        });
 
-      if (!address) {
-        throw new NotFoundException(`Address with ID ${id} not found`);
-      }
+        if (!address) {
+          throw new NotFoundException(`Address with ID ${id} not found`);
+        }
 
-      if (updateAddressDto.isDefault) {
-        await this.addressModel.update(
-          { isDefault: false },
-          {
-            where: {
-              customerId: address.customerId,
-              addressType: updateAddressDto.addressType || address.addressType,
-              id: { [Op.ne]: id },
+        if (updateAddressDto.isDefault) {
+          await this.addressModel.update(
+            { isDefault: false },
+            {
+              where: {
+                customerId: address.customerId,
+                addressType:
+                  updateAddressDto.addressType || address.addressType,
+                id: { [Op.ne]: id },
+              },
+              transaction,
             },
-            transaction,
-          },
-        );
-      }
+          );
+        }
 
-      await address.update(updateAddressDto, { transaction });
-      return address.reload({ include: ['customer'], transaction });
+        await address.update(updateAddressDto, { transaction });
+        return address.reload({ include: ['customer'], transaction });
+      } catch (error) {
+        throw error;
+      }
     });
   }
 
   async remove(id: number): Promise<void> {
-    return this.executeInTransaction(async (transaction) => {
-      const address = await this.addressModel.findByPk(id, { transaction });
-      if (!address) {
-        throw new NotFoundException(`Address with ID ${id} not found`);
+    return await this.sequelize.transaction(async (transaction) => {
+      try {
+        const address = await this.addressModel.findByPk(id, { transaction });
+        if (!address) {
+          throw new NotFoundException(`Address with ID ${id} not found`);
+        }
+        await address.destroy({ transaction });
+      } catch (error) {
+        throw error;
       }
-      await address.destroy({ transaction });
     });
   }
 
